@@ -287,18 +287,15 @@
         let isEditMode = false;
         let originalJudul = "";
 
-        // --- FUNGSI GANTI HALAMAN (FIX LAYAR PUTIH) ---
+        // --- FUNGSI GANTI HALAMAN ---
         function switchPage(pageId) {
-            // Sembunyikan semua halaman
             const pages = document.querySelectorAll('.app-page');
             pages.forEach(el => el.style.display = 'none');
             pages.forEach(el => el.classList.remove('active'));
 
-            // Tampilkan halaman target
             const target = document.getElementById(pageId);
             if(target) {
                 target.style.display = 'block';
-                // Sedikit delay agar animasi jalan
                 setTimeout(() => target.classList.add('active'), 10);
             }
 
@@ -356,7 +353,14 @@
             btn.innerHTML = `Memproses...`;
             
             try {
-                const res = await fetch(CONST_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'login', username: u, password: p }) });
+                // PERBAIKAN: Menambahkan headers agar tidak error CORS
+                const res = await fetch(CONST_WEB_APP_URL, { 
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: 'login', username: u, password: p }) 
+                });
+
                 const json = await res.json();
                 if(json.status === 'success') {
                     currentUser = { username: json.username, role: json.role };
@@ -364,7 +368,10 @@
                     showToast('Login Berhasil!', 'success');
                     switchPage('page-input');
                 } else { showToast(json.message, 'error'); }
-            } catch(err) { showToast('Gagal koneksi server', 'error'); } 
+            } catch(err) { 
+                console.error(err);
+                showToast('Gagal koneksi server', 'error'); 
+            } 
             finally { 
                 btn.disabled = false; 
                 btn.innerText = 'Masuk Aplikasi'; 
@@ -420,7 +427,14 @@
             let pct = 20; const timer = setInterval(() => { if(pct<90) { pct+=5; pBar.style.width=pct+"%"; pText.innerText = pct+"%"; } }, 200);
 
             try {
-                const res = await fetch(CONST_WEB_APP_URL, { method: 'POST', body: JSON.stringify(payload) });
+                // Update fetch agar aman
+                const res = await fetch(CONST_WEB_APP_URL, { 
+                    method: 'POST', 
+                    redirect: 'follow',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify(payload) 
+                });
+
                 const data = await res.json();
                 clearInterval(timer);
                 if(data.status === 'success') {
@@ -456,7 +470,12 @@
             loader.classList.remove('hidden'); tbody.innerHTML = '';
             
             try {
-                const res = await fetch(CONST_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'get_laporan' }) });
+                const res = await fetch(CONST_WEB_APP_URL, { 
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: 'get_laporan' }) 
+                });
                 const json = await res.json();
                 if(json.status === 'success') {
                     const data = json.data.filter(item => (currentUser.role === 'admin' || currentUser.role === 'verifikator') ? true : item.user_input === currentUser.username);
@@ -509,30 +528,33 @@
         async function hapusLaporan(judul, user) {
             if(!confirm(`Yakin ingin menghapus laporan:\n"${judul}"?`)) return;
             try {
-                await fetch(CONST_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'hapus_laporan', target_judul: judul, target_user: user }) });
+                await fetch(CONST_WEB_APP_URL, { 
+                    method: 'POST', 
+                    redirect: 'follow',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: 'hapus_laporan', target_judul: judul, target_user: user }) 
+                });
                 showToast('Data berhasil dihapus', 'success'); loadLaporan();
             } catch(e) { showToast('Gagal menghapus data', 'error'); }
         }
 
+        // --- PERBAIKAN UTAMA PADA FUNGSI LOADUSERS ---
         async function loadUsers() {
-            switchPage('page-users'); const tbody = document.getElementById('table-users'); 
+            switchPage('page-users'); 
+            const tbody = document.getElementById('table-users'); 
             tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center"><div class="inline-block w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div></td></tr>';
-           // Ganti bagian try { ... } di dalam loadUsers dengan ini:
-    try {
-        const res = await fetch(CONST_WEB_APP_URL, { 
-        method: 'POST', 
-        // Tambahkan redirect: 'follow' untuk menangani redirection Google
-        redirect: 'follow',
-        // Memaksa tipe konten text/plain agar tidak memicu CORS pre-flight
-        headers: {
-            "Content-Type": "text/plain;charset=utf-8",
-        },
-        body: JSON.stringify({ action: 'get_users' }) 
-        });
-    
-    const json = await res.json();
-    // ... sisa kode tetap sama ...
+            
+            try {
+                const res = await fetch(CONST_WEB_APP_URL, { 
+                    method: 'POST', 
+                    redirect: 'follow',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: 'get_users' }) 
+                });
+            
+                const json = await res.json();
                 tbody.innerHTML = '';
+                
                 if(json.status === 'success') {
                     json.data.forEach(u => {
                         const isPermanent = u[0].toLowerCase() === 'admin';
@@ -543,20 +565,34 @@
                     });
                 }
             } catch(e) { 
-    console.error("Error Detail:", e); // Ini akan memunculkan error asli di Console (F12)
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-red-500 p-4">Gagal memuat data user. Cek Console (F12).</td></tr>'; 
-}
+                console.error("Error Detail:", e); 
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-red-500 p-4">Gagal memuat data user. Cek Console (F12).</td></tr>'; 
+            }
+        }
 
         async function updateRole(user) {
             const newRole = document.getElementById(`role-${user}`).value;
             if(!confirm(`Ubah hak akses user "${user}" menjadi "${newRole}"?`)) return;
-            try { await fetch(CONST_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'update_role', target_user: user, new_role: newRole }) }); showToast('Role diperbarui!', 'success'); loadUsers(); } catch(e) { showToast('Gagal update role', 'error'); }
+            try { 
+                await fetch(CONST_WEB_APP_URL, { 
+                    method: 'POST', 
+                    redirect: 'follow',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: 'update_role', target_user: user, new_role: newRole }) 
+                }); 
+                showToast('Role diperbarui!', 'success'); loadUsers(); 
+            } catch(e) { showToast('Gagal update role', 'error'); }
         }
 
         async function addUser(e) {
             e.preventDefault(); if(!confirm('Tambahkan user baru ini?')) return;
             try {
-                await fetch(CONST_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'add_user', new_user: document.getElementById('new-user').value, new_pass: document.getElementById('new-pass').value, new_role: document.getElementById('new-role').value, new_email: document.getElementById('new-email').value }) });
+                await fetch(CONST_WEB_APP_URL, { 
+                    method: 'POST', 
+                    redirect: 'follow',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: 'add_user', new_user: document.getElementById('new-user').value, new_pass: document.getElementById('new-pass').value, new_role: document.getElementById('new-role').value, new_email: document.getElementById('new-email').value }) 
+                });
                 showToast('User ditambahkan!', 'success'); loadUsers(); e.target.reset();
             } catch(e) { showToast('Gagal menambah user', 'error'); }
         }
@@ -564,7 +600,12 @@
         async function handleReset(e) {
             e.preventDefault(); const btn = document.getElementById('btn-reset'); btn.disabled = true; btn.innerText = "Mengecek Database...";
             try {
-                const res = await fetch(CONST_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'lupa_password', target_user: document.getElementById('reset-user').value }) });
+                const res = await fetch(CONST_WEB_APP_URL, { 
+                    method: 'POST', 
+                    redirect: 'follow',
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({ action: 'lupa_password', target_user: document.getElementById('reset-user').value }) 
+                });
                 const json = await res.json();
                 if(json.status === 'success') { showToast('Sukses! Silakan cek email Anda.', 'success'); document.getElementById('modal-reset').classList.add('hidden'); } else { showToast(json.message, 'error'); }
             } catch(err) { showToast('Gagal koneksi server', 'error'); } finally { btn.disabled = false; btn.innerText = "Kirim Password Saya"; }
@@ -588,7 +629,6 @@
             let photos = []; if(data.foto1) photos.push({u:data.foto1,k:data.ket1}); if(data.foto2) photos.push({u:data.foto2,k:data.ket2}); if(data.foto3) photos.push({u:data.foto3,k:data.ket3}); if(data.foto4) photos.push({u:data.foto4,k:data.ket4});
             
             const imgKop = document.getElementById('img-kop-preview');
-            // imgKop.src = "data:image/png;base64,....."; 
 
             for(let i=0; i<photos.length; i+=2) {
                 container.innerHTML += `<div class="a4-paper bg-white p-12 shadow-2xl mb-8 relative page-break min-h-[297mm]"><div class="text-center font-bold uppercase mb-8 border-b-2 border-slate-800 pb-2">Dokumentasi Kegiatan</div><div class="mb-10 text-center"><div class="inline-block border p-1 rounded bg-slate-50"><img src="${photos[i].u}" class="max-w-full h-auto max-h-[350px] object-contain"></div><div class="italic text-sm mt-2 font-serif">${photos[i].k||''}</div></div>` + (photos[i+1] ? `<div class="mt-10 pt-10 border-t border-dashed border-slate-300 text-center"><div class="inline-block border p-1 rounded bg-slate-50"><img src="${photos[i+1].u}" class="max-w-full h-auto max-h-[350px] object-contain"></div><div class="italic text-sm mt-2 font-serif">${photos[i+1].k||''}</div></div>` : '') + `</div>`;
@@ -604,6 +644,7 @@
     </script>
 </body>
 </html>
+
 
 
 
